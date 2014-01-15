@@ -38,21 +38,23 @@ class AccountController extends \BaseController {
 		{
 			$account = new Account;
 			$account->ip = Request::getClientIp();
-			$account->account_key = str_random(20);
+			$account->account_key = str_random(RANDOM_KEY_LENGTH);
 			$account->save();
 			
-			$random = str_random(20);
+			$random = str_random(RANDOM_KEY_LENGTH);
 
 			$user = new User;
+			$user->username = $random;
 			$user->password = $random;
-			$account->users()->save($user);
-
+			$user->password_confirmation = $random;			
+			$account->users()->save($user);			
+			
 			Session::forget(RECENTLY_VIEWED);
 		}
 
 		Auth::login($user, true);
 		Event::fire('user.login');		
-
+		
 		return Redirect::to('invoices/create');		
 	}
 
@@ -170,6 +172,9 @@ class AccountController extends \BaseController {
 		$payments = Payment::where('account_id','=',Auth::user()->account_id)->get();
 		AccountController::exportData($output, $payments->toArray());
 
+		$credits = Credit::where('account_id','=',Auth::user()->account_id)->get();
+		AccountController::exportData($output, $credits->toArray());
+
 		fclose($output);
 		exit;
 	}
@@ -198,7 +203,7 @@ class AccountController extends \BaseController {
 		$count = 0;
 		$hasHeaders = Input::get('header_checkbox');
 		
-		$countries = Country::all();
+		$countries = Country::remember(DEFAULT_QUERY_CACHE)->all();
 		$countryMap = [];
 		foreach ($countries as $country) {
 			$countryMap[strtolower($country->name)] = $country->id;
@@ -434,6 +439,8 @@ class AccountController extends \BaseController {
 				{
 					$config->$field = trim(Input::get($gateway->id.'_'.$field));
 				}			
+				//dd(Input::all());
+				//dd($config);
 				
 				$accountGateway->config = json_encode($config);
 				$account->account_gateways()->save($accountGateway);
@@ -473,17 +480,13 @@ class AccountController extends \BaseController {
 			$account->industry_id = Input::get('industry_id') ? Input::get('industry_id') : null;
 			$account->save();
 
-			$user = $account->users()->first();
+			$user = Auth::user();
 			$user->first_name = trim(Input::get('first_name'));
 			$user->last_name = trim(Input::get('last_name'));
-			$user->username = $user->email = trim(Input::get('email'));
-			$user->phone = trim(Input::get('phone'));
-			$user->save();
-
-			if (Input::get('timezone_id')) {
-				$timezone = Timezone::findOrFail(Input::get('timezone_id'));
-				Session::put('tz', $timezone->name);
-			}
+			$user->username = trim(Input::get('email'));
+			$user->email = trim(Input::get('email'));
+			$user->phone = trim(Input::get('phone'));				
+			$user->amend(); // need to 'amend' to avoid password validation rules
 
 			/* Logo image file */
 			if ($file = Input::file('logo'))
@@ -532,6 +535,7 @@ class AccountController extends \BaseController {
 		$user->last_name = trim(Input::get('new_last_name'));
 		$user->email = trim(Input::get('new_email'));
 		$user->password = trim(Input::get('new_password'));
+		$user->password_confirmation = trim(Input::get('new_password'));
 		$user->registered = true;
 		$user->save();
 

@@ -95,7 +95,30 @@ class ClientRepository
 		}
 
 		$client->save();
+		
+		if ($publicId == "-1")
+		{
+			\Activity::createClient($client);
+		}
 
 		return $client;
 	}
+
+	public function bulk($ids, $action)
+	{
+		$clients = Client::scope($ids)->get();
+
+		foreach ($clients as $client) 
+		{			
+			if ($action == 'delete') 
+			{
+				$client->is_deleted = true;
+				$client->save();
+			} 
+			
+			$client->delete();			
+		}
+
+		return count($clients);
+	}	
 }

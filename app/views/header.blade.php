@@ -35,7 +35,8 @@
 
 	@if (!Auth::check() || Auth::user()->showGreyBackground())
 	body {
-		background-color: #F6F6F6;
+		/* background-color: #F6F6F6; */
+		background-color: #EEEEEE;
 	}
 	@endif
 
@@ -61,11 +62,11 @@
 
 @section('body')
 		
-	<div class="container">
 	<p>&nbsp;</p>
 	<p>&nbsp;</p>
 	<nav class="navbar navbar-default navbar-fixed-top" role="navigation">
-
+	<div class="container">
+	
 	  <div class="navbar-header">
 	    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar-collapse-1">
 	      <span class="sr-only">Toggle navigation</span>
@@ -136,10 +137,13 @@
 
 
 	  </div><!-- /.navbar-collapse -->
+	</div>
 	</nav>
 	
+	
 	<p>&nbsp;</p>
-
+	<div class="container">	
+	
 	@if (Session::has('message'))
 		<div class="alert alert-info">{{ Session::get('message') }}</div>
 	@endif
@@ -172,8 +176,7 @@
 		    </div>
 		    @endif
 
-		    Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice-ninja', 'open source', array('target'=>'_blank')) }}, email us at {{ link_to('mailto:contact@invoiceninja.com', 'contact@invoiceninja.com') }}.
-			<p class="text-danger">This is a demo site, the data is erased.</p>
+		    Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice-ninja', 'open source', array('target'=>'_blank')) }}, email us at {{ link_to('mailto:contact@invoiceninja.com', 'contact@invoiceninja.com') }}.			
 
 		</div>			
 		</div>
@@ -189,7 +192,8 @@
 	        <h4 class="modal-title" id="myModalLabel">Sign up</h4>
 	      </div>
 
-	      <div style="padding-right:20px" id="signUpDiv" onkeyup="validateSignUp()" onkeydown="checkForEnter(event)">
+	      <div style="background-color: #EEEEEE; padding-right:20px" id="signUpDiv" onkeyup="validateSignUp()" onkeydown="checkForEnter(event)">
+	    	<br/>
 	    	
 	    	{{ Former::open('signup/submit')->addClass('signUpForm') }}
 
@@ -205,6 +209,7 @@
 			{{ Former::password('new_password')->label('Password') }}
 			{{ Former::close() }}
 			<center><div id="errorTaken" style="display:none">&nbsp;<br/>The email address is already regiestered</div></center>
+			<br/>
 		  </div>
 
 		  <div style="padding-left:40px;padding-right:40px;display:none;min-height:130px" id="working">
@@ -214,7 +219,7 @@
 			</div>
 		  </div>
 
-	      <div class="modal-footer" id="signUpFooter">	      	
+	      <div class="modal-footer" id="signUpFooter" style="margin-top: 0px">	      	
 	      	<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
 	        <button type="button" class="btn btn-primary" onclick="submitSignUp()">Save</button>	      	
 	      </div>
@@ -300,7 +305,7 @@
 						$('.signUpForm').submit();
 					} else {
 						$('#errorTaken').show();
-  						$('form.signUpForm #email').closest('div.form-group').removeClass('has-success').addClass('has-error');
+  						$('form.signUpForm #new_email').closest('div.form-group').removeClass('has-success').addClass('has-error');
   						$('#signUpDiv, #signUpFooter').show();
 			  			$('#working').hide();
 					}
@@ -342,6 +347,9 @@
   								header: '&nbsp;<b>' + type  + '</b>',  								
   								local: data[type]
   							});  														
+  						}
+  						if (datasets.length == 0) {
+  							return;
   						}
   						$('#search').typeahead(datasets).on('typeahead:selected', function(element, datum, name) {
   							var type = name == 'Contacts' ? 'clients' : name.toLowerCase();

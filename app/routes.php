@@ -11,6 +11,8 @@
 |
 */
 
+//apc_clear_cache();
+
 //dd(DB::getQueryLog());
 //dd(Client::getPrivateId(1));
 //dd(new DateTime());
@@ -20,20 +22,43 @@
 //Log::error('test');
 
 
+Event::listen('illuminate.query', function($query, $bindings, $time, $name)
+{
+    $data = compact('bindings', 'time', 'name');
+
+    // Format binding data for sql insertion
+    foreach ($bindings as $i => $binding)
+    {   
+        if ($binding instanceof \DateTime)
+        {   
+            $bindings[$i] = $binding->format('\'Y-m-d H:i:s\'');
+        }
+        else if (is_string($binding))
+        {   
+            $bindings[$i] = "'$binding'";
+        }   
+    }       
+
+    // Insert bindings into query
+    $query = str_replace(array('%', '?'), array('%%', '%s'), $query);
+    $query = vsprintf($query, $bindings); 
+
+    Log::info($query, $data);
+});
+
+
 /*
-DB::listen(function($sql)) {
-	Log::info($sql);
-}
-*/
-
-
 // TODO_FIX replace with cron
 Route::get('/send_emails', function() {
 	Artisan::call('ninja:send-invoices');	
 });
+*/
 
-
+//Route::get('/', 'HomeController@showComingSoon');
 Route::get('/', 'HomeController@showWelcome');
+Route::get('/rocksteady', 'HomeController@showWelcome');
+
+
 Route::get('log_error', 'HomeController@logError');
 Route::post('get_started', 'AccountController@getStarted');
 
@@ -47,11 +72,11 @@ Route::post('signup/submit', 'AccountController@submitSignup');
 // Confide routes
 Route::get('login', 'UserController@login');
 Route::post('login', 'UserController@do_login');
-//Route::get( 'user/confirm/{code}', 'UserController@confirm');
+Route::get('user/confirm/{code}', 'UserController@confirm');
 Route::get('forgot_password', 'UserController@forgot_password');
 Route::post('forgot_password', 'UserController@do_forgot_password');
-//Route::get('user/reset_password/{token}', 'UserController@reset_password');
-//Route::post('user/reset_password', 'UserController@do_reset_password');
+Route::get('user/reset/{token}', 'UserController@reset_password');
+Route::post('user/reset', 'UserController@do_reset_password');
 Route::get('logout', 'UserController@logout');
 
 
@@ -131,30 +156,32 @@ HTML::macro('image_data', function($imagePath) {
 });
 
 
+define('CONTACT_EMAIL', 'contact@invoiceninja.com');
 
-define("ENV_DEVELOPMENT", "local");
-define("ENV_STAGING", "staging");
-define("ENV_PRODUCTION", "production");
+define('ENV_DEVELOPMENT', 'local');
+define('ENV_STAGING', 'staging');
+define('ENV_PRODUCTION', 'fortrabbit');
 
-define("RECENTLY_VIEWED", "RECENTLY_VIEWED");
-define("ENTITY_CLIENT", "client");
-define("ENTITY_INVOICE", "invoice");
-define("ENTITY_RECURRING_INVOICE", "recurring_invoice");
-define("ENTITY_PAYMENT", "payment");
-define("ENTITY_CREDIT", "credit");
+define('RECENTLY_VIEWED', 'RECENTLY_VIEWED');
+define('ENTITY_CLIENT', 'client');
+define('ENTITY_INVOICE', 'invoice');
+define('ENTITY_RECURRING_INVOICE', 'recurring_invoice');
+define('ENTITY_PAYMENT', 'payment');
+define('ENTITY_CREDIT', 'credit');
 
-define("PERSON_CONTACT", "contact");
-define("PERSON_USER", "user");
+define('PERSON_CONTACT', 'contact');
+define('PERSON_USER', 'user');
 
-define("ACCOUNT_DETAILS", "details");
-define("ACCOUNT_SETTINGS", "settings");
-define("ACCOUNT_IMPORT", "import");
-define("ACCOUNT_MAP", "import_map");
-define("ACCOUNT_EXPORT", "export");
+define('ACCOUNT_DETAILS', 'details');
+define('ACCOUNT_SETTINGS', 'settings');
+define('ACCOUNT_IMPORT', 'import');
+define('ACCOUNT_MAP', 'import_map');
+define('ACCOUNT_EXPORT', 'export');
 
-define("DEFAULT_INVOICE_NUMBER", "0001");
-define("RECENTLY_VIEWED_LIMIT", 8);
-define("LOGGED_ERROR_LIMIT", 100);
+define('DEFAULT_INVOICE_NUMBER', '0001');
+define('RECENTLY_VIEWED_LIMIT', 8);
+define('LOGGED_ERROR_LIMIT', 100);
+define('RANDOM_KEY_LENGTH', 32);
 
 define('INVOICE_STATUS_DRAFT', 1);
 define('INVOICE_STATUS_SENT', 2);
@@ -187,3 +214,9 @@ define('DEFAULT_QUERY_CACHE', 120);
 if (Auth::check() && !Session::has(SESSION_TIMEZONE)) {
 	Event::fire('user.refresh');
 }
+
+
+Validator::extend('positive', function($attribute, $value, $parameters)
+{
+    return Utils::parseFloat($value) > 0;
+});

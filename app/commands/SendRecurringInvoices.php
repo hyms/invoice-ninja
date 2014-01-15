@@ -23,29 +23,37 @@ class SendRecurringInvoices extends Command {
 		$this->info(date('Y-m-d') . ' Running SendRecurringInvoices...');
 
 		$today = new DateTime();
-
-		$invoices = Invoice::with('account', 'invoice_items')->whereRaw('is_recurring is true AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)', array($today, $today))->get();
+			
+		$invoices = Invoice::with('account.timezone', 'invoice_items')->whereRaw('is_recurring is true AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)', array($today, $today))->get();
 		$this->info(count($invoices) . ' recurring invoice(s) found');
 
 		foreach ($invoices as $recurInvoice)
 		{
+			date_default_timezone_set($recurInvoice->account->getTimezone());			
+			
 			$this->info('Processing Invoice ' . $recurInvoice->id . ' - Should send ' . ($recurInvoice->shouldSendToday() ? 'YES' : 'NO'));
-
+			
 			if (!$recurInvoice->shouldSendToday())
 			{
 				continue;
 			}
 			
-			$invoice = Invoice::createNew($recurInvoice);									
+			$invoice = Invoice::createNew($recurInvoice);
 			$invoice->client_id = $recurInvoice->client_id;
 			$invoice->recurring_invoice_id = $recurInvoice->id;
 			$invoice->invoice_number = 'R' . $recurInvoice->account->getNextInvoiceNumber();
 			$invoice->amount = $recurInvoice->amount;
+			$invoice->balance = $recurInvoice->amount;
 			$invoice->currency_id = $recurInvoice->currency_id;
-			$invoice->invoice_date = date_create();
-			$invoice->due_date = date_create()->modify($invoice->client->payment_terms . ' day');
-			$invoice->save();
+			$invoice->invoice_date = date_create()->format('Y-m-d');
+
+			if ($invoice->client->payment_terms)
+			{
+				$invoice->due_date = date_create()->modify($invoice->client->payment_terms . ' day')->format('Y-m-d');
+			}
 			
+			$invoice->save();
+				
 			foreach ($recurInvoice->invoice_items as $recurItem)
 			{
 				$item = InvoiceItem::createNew($recurItem);
@@ -54,10 +62,18 @@ class SendRecurringInvoices extends Command {
 				$item->cost = $recurItem->cost;
 				$item->notes = Utils::processVariables($recurItem->notes);
 				$item->product_key = Utils::processVariables($recurItem->product_key);				
-				$invoice->invoice_items()->save($item);				
+				$invoice->invoice_items()->save($item);
 			}
 
-			$recurInvoice->last_sent_date = new DateTime();
+			foreach ($recurInvoice->invitations as $recurInvitation)
+			{
+				$invitation = Invitation::createNew($recurInvitation);
+				$invitation->contact_id = $recurInvitation->contact_id;
+				$invitation->invitation_key = str_random(RANDOM_KEY_LENGTH);
+				$invoice->invitations()->save($invitation);
+			}
+
+			$recurInvoice->last_sent_date = Carbon::now()->toDateTimeString();
 			$recurInvoice->save();
 
 			$this->mailer->sendInvoice($invoice);

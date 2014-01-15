@@ -31,6 +31,22 @@ class ConstantsSeeder extends Seeder
 		$client->invoices()->save($invoice);
 		*/
 
+		PaymentType::create(array('name' => 'Apply Credit'));
+		PaymentType::create(array('name' => 'Bank Transfer'));
+		PaymentType::create(array('name' => 'Cash'));
+		PaymentType::create(array('name' => 'Debit'));
+		PaymentType::create(array('name' => 'ACH'));
+		PaymentType::create(array('name' => 'Visa Card'));
+		PaymentType::create(array('name' => 'MasterCard'));
+		PaymentType::create(array('name' => 'American Express'));
+		PaymentType::create(array('name' => 'Discover Card'));
+		PaymentType::create(array('name' => 'Diners Card'));
+		PaymentType::create(array('name' => 'EuroCard'));
+		PaymentType::create(array('name' => 'Nova'));
+		PaymentType::create(array('name' => 'Credit Card Other'));
+		PaymentType::create(array('name' => 'PayPal'));
+		PaymentType::create(array('name' => 'Google Wallet'));
+
 		Theme::create(array('name' => 'amelia'));
 		Theme::create(array('name' => 'cerulean'));
 		Theme::create(array('name' => 'cosmo'));
@@ -88,7 +104,8 @@ class ConstantsSeeder extends Seeder
 		Industry::create(array('name' => 'Transportation'));
 		Industry::create(array('name' => 'Travel & Luxury'));
 
-		Size::create(array('name' => '1 - 10'));
+		Size::create(array('name' => '1 = 3'));
+		Size::create(array('name' => '4 - 10'));
 		Size::create(array('name' => '11 - 50'));
 		Size::create(array('name' => '51 - 100'));
 		Size::create(array('name' => '101 - 500'));

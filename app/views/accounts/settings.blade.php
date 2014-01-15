@@ -14,7 +14,13 @@
 	@if ($accountGateway)
 		{{ Former::populateField('gateway_id', $accountGateway->gateway_id) }}
 		@foreach ($accountGateway->fields as $field => $junk)
-			{{ Former::populateField($accountGateway->gateway_id.'_'.$field, $config->$field) }}
+			@if ($field == 'testMode' || $field == 'developerMode')
+				@if ($config->$field)
+					{{ Former::populateField($accountGateway->gateway_id.'_'.$field, true ) }}
+				@endif
+			@else
+				{{ Former::populateField($accountGateway->gateway_id.'_'.$field, $config->$field) }}
+			@endif
 		@endforeach
 	@endif
 
@@ -50,13 +56,13 @@
 	{{ Former::select('datetime_format_id')->addOption('','')->label('Date/Time Format')
 		->fromQuery($datetimeFormats, 'label', 'id') }}
 
-	{{ Former::legend('Notifications') }}
+	{{ Former::legend('Email Notifications') }}
 	{{ Former::checkbox('notify_sent')->label('&nbsp;')->text('Email me when an invoice is <b>sent</b>') }}
 	{{ Former::checkbox('notify_viewed')->label('&nbsp;')->text('Email me when an invoice is <b>viewed</b>') }}
 	{{ Former::checkbox('notify_paid')->label('&nbsp;')->text('Email me when an invoice is <b>paid</b>') }}
 
-	{{ Former::legend('Invoices') }}
-	{{ Former::textarea('invoice_terms') }}
+	{{ Former::legend('Invoice Terms') }}
+	{{ Former::textarea('invoice_terms')->label('Terms') }}
 
 	{{ Former::actions( Button::lg_primary_submit('Save') ) }}
 	{{ Former::close() }}

@@ -19,7 +19,7 @@ class InvoiceRepository
     				->where('clients.deleted_at', '=', null)
     				->where('invoices.is_recurring', '=', false)    			
     				->where('contacts.is_primary', '=', true)	
-					->select('clients.public_id as client_public_id', 'invoice_number', 'clients.name as client_name', 'invoices.public_id', 'amount', 'invoices.balance', 'invoice_date', 'due_date', 'invoice_statuses.name as invoice_status_name', 'invoices.currency_id', 'contacts.first_name', 'contacts.last_name', 'contacts.email');
+					->select('clients.public_id as client_public_id', 'invoice_number', 'clients.name as client_name', 'invoices.public_id', 'amount', 'invoices.balance', 'invoice_date', 'due_date', 'invoice_statuses.name as invoice_status_name', 'clients.currency_id', 'contacts.first_name', 'contacts.last_name', 'contacts.email');
 
     	if ($clientPublicId) 
     	{
@@ -49,7 +49,7 @@ class InvoiceRepository
     				->where('invoices.deleted_at', '=', null)
     				->where('invoices.is_recurring', '=', true)
     				->where('contacts.is_primary', '=', true)	
-					->select('clients.public_id as client_public_id', 'clients.name as client_name', 'invoices.public_id', 'amount', 'frequencies.name as frequency', 'start_date', 'end_date', 'invoices.currency_id', 'contacts.first_name', 'contacts.last_name', 'contacts.email');
+					->select('clients.public_id as client_public_id', 'clients.name as client_name', 'invoices.public_id', 'amount', 'frequencies.name as frequency', 'start_date', 'end_date', 'clients.currency_id', 'contacts.first_name', 'contacts.last_name', 'contacts.email');
 
     	if ($clientPublicId) 
     	{
@@ -82,6 +82,12 @@ class InvoiceRepository
     	$invoice = (array) $input;
     	$invoiceId = isset($invoice['public_id']) && $invoice['public_id'] ? Invoice::getPrivateId($invoice['public_id']) : null;
     	$rules = ['invoice_number' => 'unique:invoices,invoice_number,' . $invoiceId . ',id,account_id,' . \Auth::user()->account_id];    	
+
+    	if ($invoice['is_recurring'] && $invoice['start_date'] && $invoice['end_date'])
+    	{
+    		$rules['end_date'] = 'after:' . $invoice['start_date'];
+    	}
+
     	$validator = \Validator::make($invoice, $rules);
 
     	if ($validator->fails())
@@ -104,7 +110,7 @@ class InvoiceRepository
 		}			
 		
 		$invoice->client_id = $data['client_id'];
-		$invoice->discount = floatval($data['discount']);
+		$invoice->discount = Utils::parseFloat($data['discount']);
 		$invoice->invoice_number = trim($data['invoice_number']);
 		$invoice->invoice_date = Utils::toSqlDate($data['invoice_date']);
 		$invoice->due_date = Utils::toSqlDate($data['due_date']);					
@@ -116,11 +122,11 @@ class InvoiceRepository
 		$invoice->terms = trim($data['terms']);
 		$invoice->public_notes = trim($data['public_notes']);
 		$invoice->po_number = trim($data['po_number']);
-		$invoice->currency_id = $data['currency_id'];
+		//$invoice->currency_id = $data['currency_id'];
 		
-		if (isset($data['tax_rate']) && floatval($data['tax_rate']) > 0)
+		if (isset($data['tax_rate']) && Utils::parseFloat($data['tax_rate']) > 0)
 		{
-			$invoice->tax_rate = floatval($data['tax_rate']);
+			$invoice->tax_rate = Utils::parseFloat($data['tax_rate']);
 			$invoice->tax_name = trim($data['tax_name']);
 		} 
 		else
@@ -164,13 +170,13 @@ class InvoiceRepository
 			$invoiceItem->product_id = isset($product) ? $product->id : null;
 			$invoiceItem->product_key = trim($item->product_key);
 			$invoiceItem->notes = trim($item->notes);
-			$invoiceItem->cost = floatval($item->cost);
-			$invoiceItem->qty = floatval($item->qty);
+			$invoiceItem->cost = Utils::parseFloat($item->cost);
+			$invoiceItem->qty = Utils::parseFloat($item->qty);
 			$invoiceItem->tax_rate = 0;
 
-			if (isset($item->tax_rate) && floatval($item->tax_rate) > 0)
+			if (isset($item->tax_rate) && Utils::parseFloat($item->tax_rate) > 0)
 			{
-				$invoiceItem->tax_rate = floatval($item->tax_rate);
+				$invoiceItem->tax_rate = Utils::parseFloat($item->tax_rate);
 				$invoiceItem->tax_name = trim($item->tax_name);
 			}
 
@@ -191,6 +197,36 @@ class InvoiceRepository
 		$invoice->balance = $total;
 		$invoice->save();
 
+		if ($data['set_default_terms'])
+		{
+			$account = \Auth::user()->account;
+			$account->invoice_terms = $invoice->terms;
+			$account->save();
+		}
+
 		return $invoice;
+	}
+
+	public function bulk($ids, $action)
+	{
+		if (!$ids)
+		{
+			return 0;
+		}
+
+		$invoices = Invoice::scope($ids)->get();
+
+		foreach ($invoices as $invoice) 
+		{
+			if ($action == 'delete') 
+			{
+				$invoice->is_deleted = true;
+				$invoice->save();
+			} 
+
+			$invoice->delete();
+		}
+
+		return count($invoices);
 	}
 }

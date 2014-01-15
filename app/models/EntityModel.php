@@ -3,6 +3,8 @@
 class EntityModel extends Eloquent
 {
 	protected $softDelete = true;
+	public $timestamps = true;
+	
 	protected $hidden = ['id', 'created_at', 'deleted_at', 'updated_at'];
 
 	public static function createNew($parent = false)
@@ -10,13 +12,18 @@ class EntityModel extends Eloquent
 		$className = get_called_class();
 		$entity = new $className();
 		
-		if (Auth::check()) {
-			$entity->user_id = Auth::user()->id;
-			$entity->account_id = Auth::user()->account_id;
-		} else if ($parent) {
+		if ($parent) 
+		{
 			$entity->user_id = $parent->user_id;
 			$entity->account_id = $parent->account_id;
-		} else {
+		} 
+		else if (Auth::check()) 
+		{
+			$entity->user_id = Auth::user()->id;
+			$entity->account_id = Auth::user()->account_id;			
+		} 
+		else 
+		{
 			Utils::fatalError();
 		}
 
@@ -40,10 +47,22 @@ class EntityModel extends Eloquent
 		return $className::scope($publicId)->pluck('id');
 	}
 
+	public function getActivityKey()
+	{
+		return $this->getEntityType() . ':' . $this->public_id . ':' . $this->getName();
+	}
+
+	/*
+	public function getEntityType()
+	{
+		return '';
+	}
+
 	public function getNmae()
 	{
 		return '';
 	}
+	*/
 
 	public function scopeScope($query, $publicId = false, $accountId = false)
 	{

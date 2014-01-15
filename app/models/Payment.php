@@ -20,7 +20,6 @@ class Payment extends EntityModel
 	public function getName()
 	{
 		return '';
-		//return $this->invoice_number;
 	}
 
 	public function getEntityType()
@@ -33,4 +32,14 @@ class Payment extends EntityModel
 Payment::created(function($payment)
 {
 	Activity::createPayment($payment);
+});
+
+Payment::updating(function($payment)
+{
+	Activity::updatePayment($payment);
+});
+
+Payment::deleting(function($payment)
+{
+	Activity::archivePayment($payment);
 });

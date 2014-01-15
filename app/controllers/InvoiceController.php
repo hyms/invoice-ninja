@@ -68,12 +68,14 @@ class InvoiceController extends \BaseController {
   							<ul class="dropdown-menu" role="menu">
 						    <li><a href="' . URL::to('invoices/'.$model->public_id.'/edit') . '">Edit Invoice</a></li>
 						    <li class="divider"></li>
+						    <li><a href="' . URL::to('payments/create/' . $model->client_public_id . '/' . $model->public_id ) . '">Enter Payment</a></li>
+						    <li><a href="' . URL::to('credits/create/' . $model->client_public_id . '/' . $model->public_id ) . '">Enter Credit</a></li>
+						    <li class="divider"></li>
 						    <li><a href="javascript:archiveEntity(' . $model->public_id . ')">Archive Invoice</a></li>
 						    <li><a href="javascript:deleteEntity(' . $model->public_id . ')">Delete Invoice</a></li>						    
 						  </ul>
 						</div>';
     	    })    	       	    
-    	    ->orderColumns('invoice_number','client','total','balance','invoice_date','due_date','invoice_status_name')
     	    ->make();    	
     }
 
@@ -109,7 +111,6 @@ class InvoiceController extends \BaseController {
 						  </ul>
 						</div>';
     	    })    	       	    
-    	    ->orderColumns('client','total','frequency','start_date','end_date')
     	    ->make();    	
     }
 
@@ -134,8 +135,12 @@ class InvoiceController extends \BaseController {
 		}
 
 		Activity::viewInvoice($invitation);	
+		Event::fire('invoice.viewed', $invoice);
 
 		$client->account->loadLocalizationSettings();		
+
+		$invoice->invoice_date = Utils::fromSqlDate($invoice->invoice_date);
+		$invoice->due_date = Utils::fromSqlDate($invoice->due_date);
 
 		$data = array(
 			'invoice' => $invoice->hidePrivateFields(),
@@ -202,19 +207,20 @@ class InvoiceController extends \BaseController {
 
 			if (!$ref)
 			{
-				Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>');
+				return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>', $response->getMessage());
 			}
 
 			$payment = Payment::createNew();
 			$payment->invitation_id = $invitation->id;
+			$payment->account_gateway_id = $accountGateway->id;
 			$payment->invoice_id = $invoice->id;
 			$payment->amount = $invoice->amount;			
 			$payment->client_id = $invoice->client_id;
+			$payment->currency_id = $invoice->currency_id ? $invoice->currency_id : 0;
 			$payment->contact_id = $invitation->contact_id;
 			$payment->transaction_reference = $ref;
+			$payment->payment_date = date_create();
 			$payment->save();
-
-			$invoice->balance = floatval($invoice->amount) - floatval($paymount->amount);
 
 			if ($response->isSuccessful())
 			{
@@ -231,7 +237,7 @@ class InvoiceController extends \BaseController {
 	    } 
 	    catch (\Exception $e) 
 	    {
-	    	return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>'.$e);
+	    	return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>', $e);
 		}
 	}
 
@@ -265,19 +271,22 @@ class InvoiceController extends \BaseController {
 				{
 					$invoice->invoice_status_id = INVOICE_STATUS_PARTIAL;
 				}
-				$invoice->save();
 				
+				$invoice->save();
+								
+				Event::fire('invoice.paid', $invoice);
+
 				Session::flash('message', 'Successfully applied payment');	
 				return Redirect::to('view/' . $payment->invitation->invitation_key);				
 			}
 			else
 			{
-				return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>'.$response->getMessage());				
+				return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>', $response->getMessage());				
 			}
 	    } 
 	    catch (\Exception $e) 
 	    {
-			return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>'.$e);
+			return Utils::fatalError('Sorry, there was an error processing your payment. Please try again later.<p>', $e);
 		}
 	}
 
@@ -286,7 +295,12 @@ class InvoiceController extends \BaseController {
 	{
 		$invoice = Invoice::scope($publicId)->with('account.country', 'client.contacts', 'client.country', 'invoice_items')->firstOrFail();
 		Utils::trackViewed($invoice->invoice_number . ' - ' . $invoice->client->getDisplayName(), ENTITY_INVOICE);
-			
+	
+		$invoice->invoice_date = Utils::fromSqlDate($invoice->invoice_date);
+		$invoice->due_date = Utils::fromSqlDate($invoice->due_date);
+		$invoice->start_date = Utils::fromSqlDate($invoice->start_date);
+		$invoice->end_date = Utils::fromSqlDate($invoice->end_date);
+
     	$contactIds = DB::table('invitations')
     				->join('contacts', 'contacts.id', '=','invitations.contact_id')
     				->where('invitations.invoice_id', '=', $invoice->id)
@@ -420,7 +434,7 @@ class InvoiceController extends \BaseController {
 					$invitation = Invitation::createNew();
 					$invitation->invoice_id = $invoice->id;
 					$invitation->contact_id = $contact->id;
-					$invitation->invitation_key = str_random(20);				
+					$invitation->invitation_key = str_random(RANDOM_KEY_LENGTH);
 					$invitation->save();
 				}				
 				else if (!in_array($contact->id, $sendInvoiceIds) && $invitation)
@@ -444,7 +458,7 @@ class InvoiceController extends \BaseController {
 			}
 			else if ($action == 'email') 
 			{							
-				$this->mailer->sendInvoice($invoice);								
+				$this->mailer->sendInvoice($invoice);
 				Session::flash('message', 'Successfully emailed invoice'.$message);
 			} 
 			else 
@@ -489,21 +503,13 @@ class InvoiceController extends \BaseController {
 	{
 		$action = Input::get('action');
 		$ids = Input::get('id') ? Input::get('id') : Input::get('ids');
-		$invoices = Invoice::scope($ids)->get();
+		$count = $this->invoiceRepo->bulk($ids, $action);
 
-		foreach ($invoices as $invoice) 
-		{
-			if ($action == 'delete') 
-			{
-				$invoice->is_deleted = true;
-				$invoice->save();
-			} 
-			
-			$invoice->delete();
+ 		if ($count > 0)		
+ 		{
+			$message = Utils::pluralize('Successfully '.$action.'d ? invoice', $count);
+			Session::flash('message', $message);
 		}
-
-		$message = Utils::pluralize('Successfully '.$action.'d ? invoice', count($invoices));
-		Session::flash('message', $message);
 
 		return Redirect::to('invoices');
 	}

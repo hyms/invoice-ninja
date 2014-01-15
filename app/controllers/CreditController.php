@@ -23,7 +23,7 @@ class CreditController extends \BaseController {
         return View::make('list', array(
             'entityType'=>ENTITY_CREDIT, 
             'title' => '- Credits',
-            'columns'=>['checkbox', 'Client', 'Credit Amount', 'Credit Date', 'Action']
+            'columns'=>['checkbox', 'Client', 'Credit Amount', 'Credit Date', 'Private Notes', 'Action']
         ));
     }
 
@@ -41,6 +41,7 @@ class CreditController extends \BaseController {
         
         return $table->addColumn('amount', function($model){ return Utils::formatMoney($model->amount, $model->currency_id); })
             ->addColumn('credit_date', function($model) { return Utils::fromSqlDate($model->credit_date); })
+            ->addColumn('private_notes', function($model) { return $model->private_notes; })
             ->addColumn('dropdown', function($model) 
             { 
                 return '<div class="btn-group tr-action" style="visibility:hidden;">
@@ -53,7 +54,6 @@ class CreditController extends \BaseController {
                           </ul>
                         </div>';
             })         
-            ->orderColumns('number')
             ->make();       
     }
 
@@ -61,14 +61,14 @@ class CreditController extends \BaseController {
     public function create($clientPublicId = 0, $invoicePublicId = 0)
     {       
         $data = array(
-            'clientPublicId' => $clientPublicId,
-            'invoicePublicId' => $invoicePublicId,
+            'clientPublicId' => Input::old('client') ? Input::old('client') : $clientPublicId,
+            'invoicePublicId' => Input::old('invoice') ? Input::old('invoice') : $invoicePublicId,
             'credit' => null, 
             'method' => 'POST', 
             'url' => 'credits', 
             'title' => '- New Credit',
-            'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
-            'invoices' => Invoice::scope()->with('client')->where('balance','>',0)->orderBy('invoice_number')->get(),
+            //'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
+            'invoices' => Invoice::scope()->with('client', 'invoice_status')->orderBy('invoice_number')->get(),
             'clients' => Client::scope()->with('contacts')->orderBy('name')->get());
 
         return View::make('credits.edit', $data);
@@ -85,7 +85,7 @@ class CreditController extends \BaseController {
             'method' => 'PUT', 
             'url' => 'credits/' . $publicId, 
             'title' => '- Edit Credit',
-            'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
+            //'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
             'clients' => Client::scope()->with('contacts')->orderBy('name')->get());
         return View::make('credit.edit', $data);
     }
@@ -104,7 +104,7 @@ class CreditController extends \BaseController {
     {
         $rules = array(
             'client' => 'required',
-            'amount' => 'required',            
+            'amount' => 'required|positive',
         );
 
         $validator = Validator::make(Input::all(), $rules);
@@ -132,8 +132,11 @@ class CreditController extends \BaseController {
         $ids = Input::get('id') ? Input::get('id') : Input::get('ids');        
         $count = $this->creditRepo->bulk($ids, $action);
 
-        $message = Utils::pluralize('Successfully '.$action.'d ? credit', $count);
-        Session::flash('message', $message);
+        if ($count > 0)
+        {
+            $message = Utils::pluralize('Successfully '.$action.'d ? credit', $count);
+            Session::flash('message', $message);
+        }
 
         return Redirect::to('credits');
     }

@@ -2,21 +2,52 @@
 
 class Utils
 {
-	public static function fatalError($error = false)
+	public static function fatalError($message = false, $exception = false)
 	{
-		if (!$error)
+		if (!$message)
 		{
-			$error = "An error occurred, please try again later";
+			$message = "An error occurred, please try again later";
 		}
 
-		Log::error($error);
+		static::logError($message . ' ' . $exception);		
 
-		return View::make('error')->with('error', $error);
+		return View::make('error')->with('error', $message);
+	}
+
+	public static function logError($error, $context = 'PHP')
+	{
+		$count = Session::get('error_count', 0);
+		Session::put('error_count', ++$count);
+		if ($count > 100) return 'logged';
+
+		$data = [
+			'context' => $context,
+			'user_id' => Auth::check() ? Auth::user()->id : 0,
+			'url' => Input::get('url'),
+			'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
+			'ip' => Request::getClientIp(),
+			'count' => Session::get('error_count', 0)
+		];
+
+		Log::error($error, $data);
+
+		/*
+		Mail::queue('emails.error', ['message'=>$error.' '.json_encode($data)], function($message)
+		{			
+			$message->to($email)->subject($subject);
+		});		
+		*/
+	}
+
+	public static function parseFloat($value)
+	{
+		$value = preg_replace('/[^0-9\.\-]/', '', $value);
+		return floatval($value);
 	}
 
 	public static function formatPhoneNumber($phoneNumber) 
 	{
-	    $phoneNumber = preg_replace('/[^0-9]/','',$phoneNumber);
+	    $phoneNumber = preg_replace('/[^0-9a-zA-Z]/','',$phoneNumber);
 
 	    if (!$phoneNumber) {
 	    	return '';
@@ -49,10 +80,13 @@ class Utils
 
 	public static function formatMoney($value, $currencyId)
 	{
-		$currency = Currency::find($currencyId);		
-		if (!$currency) {
-			$currency = Currency::find(1);		
+		$currency = Currency::remember(DEFAULT_QUERY_CACHE)->find($currencyId);		
+
+		if (!$currency) 
+		{
+			$currency = Currency::remember(DEFAULT_QUERY_CACHE)->find(1);		
 		}
+		
 		return $currency->symbol . number_format($value, $currency->precision, $currency->decimal_separator, $currency->thousand_separator);
 	}
 
@@ -116,7 +150,7 @@ class Utils
 		$timezone = Session::get(SESSION_TIMEZONE);
 		$format = Session::get(SESSION_DATE_FORMAT);
 
-		return DateTime::createFromFormat($format, $date, new DateTimeZone($timezone));			
+		return DateTime::createFromFormat($format, $date, new DateTimeZone($timezone))->format('Y-m-d');
 	}
 	
 	public static function fromSqlDate($date)
@@ -239,8 +273,15 @@ class Utils
 			"July", "August", "September", "October", "November", "December" ];
 
 		$month = intval(date('n')) - 1;
+
 		$month += $offset;
 		$month = $month % 12;
+
+		if ($month < 0)
+		{
+			$month += 12;
+		}
+		
 		return $months[$month];
 	}
 
@@ -283,4 +324,31 @@ class Utils
 		}
 	}
 
+	public static function encodeActivity($person = null, $action, $entity = null, $otherPerson = null)
+	{
+		$person = $person ? $person->getDisplayName() : '<i>System</i>';
+		$entity = $entity ? '[' . $entity->getActivityKey() . ']' : '';
+		$otherPerson = $otherPerson ? 'to ' . $otherPerson->getDisplayName() : '';
+
+		return trim("$person $action $entity $otherPerson");
+	}
+	
+	public static function decodeActivity($message)
+	{
+		$pattern = '/\[([\w]*):([\d]*):(.*)\]/i';
+		preg_match($pattern, $message, $matches);
+
+		if (count($matches) > 0)
+		{
+			$match = $matches[0];
+			$type = $matches[1];
+			$publicId = $matches[2];
+			$name = $matches[3];
+
+			$link = link_to($type . 's/' . $publicId, $name);
+			$message = str_replace($match, "$type $link", $message);
+		}
+
+		return $message;
+	}	
 }

@@ -36,27 +36,7 @@ class Invoice extends EntityModel
 	{
 		return ENTITY_INVOICE;
 	}	
-
-	public function getInvoiceDateAttribute($value)
-	{
-		return Utils::fromSqlDate($value);
-	}
 	
-	public function getDueDateAttribute($value)
-	{
-		return Utils::fromSqlDate($value);
-	}
-	
-	public function getStartDateAttribute($value)
-	{
-		return Utils::fromSqlDate($value);
-	}
-	
-	public function getEndDateAttribute($value)
-	{
-		return Utils::fromSqlDate($value);
-	}
-
 	public function isSent()
 	{
 		return $this->invoice_status_id >= INVOICE_STATUS_SENT;
@@ -69,10 +49,10 @@ class Invoice extends EntityModel
 
 	public function hidePrivateFields()
 	{
-		$this->setVisible(['invoice_number', 'discount', 'po_number', 'invoice_date', 'due_date', 'terms', 'currency_id', 'public_notes', 'amount', 'balance', 'invoice_items', 'client', 'tax_name', 'tax_rate', 'account']);
+		$this->setVisible(['invoice_number', 'discount', 'po_number', 'invoice_date', 'due_date', 'terms', 'public_notes', 'amount', 'balance', 'invoice_items', 'client', 'tax_name', 'tax_rate', 'account']);
 		
-		$this->client->setVisible(['name', 'address1', 'address2', 'city', 'state', 'postal_code', 'work_phone', 'payment_terms', 'contacts', 'country']);
-		$this->account->setVisible(['name', 'address1', 'address2', 'city', 'state', 'postal_code', 'country']);		
+		$this->client->setVisible(['name', 'address1', 'address2', 'city', 'state', 'postal_code', 'work_phone', 'payment_terms', 'contacts', 'country', 'currency_id' ]);
+		$this->account->setVisible(['name', 'address1', 'address2', 'city', 'state', 'postal_code', 'country', 'currency_id']);		
 
 		foreach ($this->invoice_items as $invoiceItem) 
 		{
@@ -94,18 +74,22 @@ class Invoice extends EntityModel
 
 		$dayOfMonthToday = date('j');
 		$dayOfMonthStart = date('j', strtotime($this->start_date));
-			
-		if (!$this->last_sent_date) {
+		
+		if (!$this->last_sent_date) 
+		{
 			$daysSinceLastSent = 0;
 			$monthsSinceLastSent = 0;
-		} else {
+		} 
+		else 
+		{	
 			$date1 = new DateTime($this->last_sent_date);
 			$date2 = new DateTime();
 			$diff = $date2->diff($date1);
 			$daysSinceLastSent = $diff->format("%a");
 			$monthsSinceLastSent = ($diff->format('%y') * 12) + $diff->format('%m');
 
-			if ($daysSinceLastSent == 0) {
+			if ($daysSinceLastSent == 0) 
+			{
 				return false;
 			}
 		}
@@ -143,4 +127,9 @@ Invoice::created(function($invoice)
 Invoice::updating(function($invoice)
 {
 	Activity::updateInvoice($invoice);
+});
+
+Invoice::deleting(function($invoice)
+{
+	Activity::archiveInvoice($invoice);
 });

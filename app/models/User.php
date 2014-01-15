@@ -9,12 +9,14 @@ class User extends ConfideUser implements UserInterface, RemindableInterface
 	protected $softDelete = true;
 
     public static $rules = array(
-    	/*
-        'username' => 'required|email|unique:users',
-        'email' => 'required|email|unique:users',
-        'password' => 'required|between:4,20|confirmed',
-        'password_confirmation' => 'between:4,20',
-        */
+    	'username' => 'required|unique:users',
+        'password' => 'required|between:6,32|confirmed',
+        'password_confirmation' => 'between:6,32',        
+    );
+
+    protected $updateRules = array(
+    	'email' => 'required|unique:users',
+		'username' => 'required|unique:users',
     );
 
 	/**
@@ -69,22 +71,49 @@ class User extends ConfideUser implements UserInterface, RemindableInterface
 		return $this->email;
 	}
 
-	public function getFullName()
+	public function getDisplayName()
 	{
-		$fullName = $this->first_name . ' ' . $this->last_name;
-
-		if ($fullName == ' ')
+		if ($this->getFullName())
 		{
-			return "Guest";
+			return $this->getFullName();
+		}
+		else if ($this->email)
+		{
+			return $this->email;
 		}
 		else
 		{
-			return $fullName;
+			return 'Guest';
+		}
+	}
+
+
+	public function getFullName()
+	{
+		if ($this->first_name || $this->last_name)
+		{
+			return $this->first_name . ' ' . $this->last_name;
+		}
+		else
+		{
+			return '';
 		}
 	}	
 
 	public function showGreyBackground()
 	{
 		return !$this->theme_id || in_array($this->theme_id, [2, 3, 5, 6, 7, 8, 10, 11, 12]);
+	}
+
+	public function afterSave($success=true, $forced = false)
+	{
+		if ($this->email)
+		{
+			return parent::afterSave($success=true, $forced = false);
+		}
+		else
+		{
+			return true;
+		}	
 	}
 }
